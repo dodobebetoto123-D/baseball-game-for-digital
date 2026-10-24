@@ -1,0 +1,466 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>카드 야구 디지털 — KBO 10팀</title>
+<style>
+*{box-sizing:border-box}body{font-family:"Malgun Gothic",sans-serif;margin:0;background:#0f172a;color:#111}
+.wrap{max-width:900px;margin:0 auto;background:#fff;min-height:100vh;padding:14px}
+h1{font-size:24px;margin:4px 0}h2{font-size:17px;margin:16px 0 6px}
+p,li{font-size:14px;line-height:1.55}.small{font-size:12.5px;color:#555}
+select,button{font-size:15px;padding:9px 10px;border-radius:8px;border:1px solid #999;background:#fff}
+button{cursor:pointer}button.primary{background:#0b3d91;color:#fff;border-color:#0b3d91}
+button:disabled{opacity:.45;cursor:not-allowed}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.controls label{font-size:14px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #bbb;padding:5px;text-align:center}th{background:#eee}
+.score td.cur{background:#fff7cc;font-weight:900}
+.cardbox{border:2px solid #0b3d91;border-radius:10px;padding:10px;margin:8px 0}
+.cardbox.kia{border-color:#c8102e}
+.stars{color:#e5a100;font-size:18px;letter-spacing:1px}
+.bases{display:flex;gap:8px;flex-wrap:wrap;font-size:14px;margin:6px 0}
+.bases span{border:1px solid #999;border-radius:6px;padding:4px 8px}.bases span.on{background:#dcfce7;font-weight:900}
+.log{border:1px solid #bbb;border-radius:8px;padding:8px;max-height:260px;overflow:auto;font-size:13px;line-height:1.5}
+.log div{border-bottom:1px dotted #ddd;padding:2px 0}
+.roster{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.roster{grid-template-columns:1fr}}
+.tag{display:inline-block;background:#eee;border-radius:6px;padding:1px 6px;font-size:12px}
+</style></head><body><div class="wrap">
+<h1>⚾ 카드 야구 디지털</h1>
+<p class="small">종이 카드 게임의 디지털판. 결과 카드는 v3 밸런스 덱(강타 출루율 25% · 컨택트 36% · 기다리기 42%)을 씁니다. OVR·별은 게임 밸런스용 숫자이며 실제 선수 평가가 아닙니다. 라인업은 2026 시즌 기준 대표 구성입니다. 인쇄판 별 시스템은 보류, 별 시스템은 디지털에서만 적용합니다.</p>
+
+<h2>경기 설정</h2>
+<div class="controls">
+<label>원정 <select id="awaySel"></select></label>
+<label>홈 <select id="homeSel"></select></label>
+<label>이닝 <select id="innSel"><option value="5">5이닝</option><option value="9" selected>9이닝</option></select></label>
+<label>자동 전략 <select id="autoSel"><option value="situation">상황별</option><option value="contact">컨택트 고정</option><option value="power">강타 고정</option><option value="wait">기다리기 고정</option><option value="random">랜덤</option></select></label>
+<button class="primary" id="startBtn">경기 시작</button>
+<button id="resetBtn">초기화</button>
+</div>
+
+<h2>점수판</h2>
+<table id="scoreTbl"><thead><tr><th>팀</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>연장</th><th>R</th></tr></thead>
+<tbody><tr id="awayRow"><td>원정</td></tr><tr id="homeRow"><td>홈</td></tr></tbody></table>
+<p id="gameInfo" style="font-weight:900">팀을 고르고 경기 시작을 누르세요.</p>
+<div class="bases" id="basesBox"></div>
+
+<div class="cardbox" id="batterBox"><b>타자</b><div id="batterInfo">-</div></div>
+<div class="cardbox kia" id="pitcherBox"><b>투수</b><div id="pitcherInfo">-</div></div>
+
+<h2>타석</h2>
+<div class="controls">
+<button data-strat="power">💪 강타</button>
+<button data-strat="contact">🎯 컨택트</button>
+<button data-strat="wait">👀 기다리기</button>
+<button id="buntBtn">희생번트</button>
+<button id="stealBtn">도루 시도</button>
+</div>
+<div class="controls">
+<span id="stratPicked">선택한 전략: (없음)</span>
+<button class="primary" id="drawBtn" disabled>결과 뽑기</button>
+</div>
+<div id="pendingBox" style="display:none;border:2px solid #e5a100;border-radius:10px;padding:10px;margin:8px 0"></div>
+
+<h2>자동 · 시뮬레이션</h2>
+<div class="controls">
+<button id="auto1Btn">1타석 자동</button>
+<button id="autoInnBtn">1이닝 자동</button>
+<button id="autoGameBtn">경기 끝까지 자동</button>
+<button id="sim100Btn">100경기 시뮬 (컨택트 고정, 능력 제외)</button>
+</div>
+<div id="simResult" class="small"></div>
+
+<h2>투수 · 대타 교체 (타석 사이에만)</h2>
+<div class="controls">
+<label>수비팀 투수 <select id="pitchSel"></select></label>
+<button id="pitchChangeBtn">투수 교체</button>
+<label>대타 <select id="benchSel"></select></label>
+<button id="benchChangeBtn">대타 교체</button>
+</div>
+
+<h2>기록</h2>
+<div class="log" id="logBox"></div>
+
+<h2>별 등급 안내</h2>
+<p>별은 OVR에서 자동 계산됩니다. ★5: 90 이상 · ★4: 85~89 · ★3: 80~84 · ★2: 75~79 · ★1: 74 이하. ★5 선수는 타입 능력을 2회, 나머지는 1회 쓸 수 있습니다. 디지털에서는 선수·팀을 코드에서 바로 바꿀 수 있어 밸런스 교체가 빠릅니다.</p>
+
+<h2>라인업</h2>
+<div class="roster"><div><h3 id="awayTitle">원정</h3><div id="awayRoster"></div></div><div><h3 id="homeTitle">홈</h3><div id="homeRoster"></div></div></div>
+<p class="small">규칙 요약: 차이 = 타자 OVR − 투수 OVR, 투수 상성(강속구→강타, 변화구→컨택트, 제구→기다리기)이 맞으면 −5. +10 이상 업, −10 이하 다운. 업: 아웃→1루타→2루타→3루타→홈런. 다운: 역순, 1루타→땅볼 아웃. 볼넷·실책은 유지. 투수 개인 4번째 수비 이닝부터 OVR −5 (★5 투수 면제). 희생번트: 주자 진루·타자 아웃. 도루: 컨택트 행이 안타면 성공.</p>
+<script>
+const COUNTER={fire:"power",change:"contact",control:"wait"};
+const TYPE_KR={fire:"강속구",change:"변화구",control:"제구"};
+const STRAT_KR={power:"강타",contact:"컨택트",wait:"기다리기"};
+const BAT_TYPE={power:"파워",contact:"컨택트",wait:"선구안",speed:"스피드",balance:"밸런스"};
+function starOf(ovr){if(ovr>=90)return 5;if(ovr>=85)return 4;if(ovr>=80)return 3;if(ovr>=75)return 2;return 1;}
+function stars(n){return "★".repeat(n)+"☆".repeat(5-n);}
+// 팀 데이터: [이름, 포지션, OVR, 타입] / 투수: [이름, 역할, OVR, 투수타입]
+const TEAMS={
+"삼성":{color:"#0b3d91",bat:[["김지찬","2루수",84,"speed"],["이재현","유격수",85,"contact"],["구자욱","좌익수",91,"power"],["디아즈","1루수",93,"power"],["김영웅","3루수",86,"power"],["김성윤","우익수",89,"speed"],["최형우","지명타자",88,"contact"],["강민호","포수",84,"contact"],["김헌곤","중견수",82,"balance"]],bench:[["전병우","내야수",79,"power"],["이성규","외야수",78,"contact"],["류지혁","내야수",81,"contact"]],pit:[["원태인","선발",91,"change"],["이승현","중간",80,"fire"],["김재윤","마무리",88,"control"]]},
+"KIA":{color:"#c8102e",bat:[["박재현","좌익수",85,"speed"],["김선빈","2루수",85,"contact"],["김도영","3루수",92,"power"],["나성범","우익수",90,"power"],["카스트로","1루수",87,"contact"],["오선우","지명타자",86,"power"],["김호령","중견수",82,"speed"],["한준수","포수",80,"wait"],["정현창","유격수",78,"balance"]],bench:[["서건창","내야수",81,"contact"],["변우혁","내야수",77,"power"],["윤도현","내야수",74,"speed"]],pit:[["네일","선발",92,"fire"],["양현종","중간",82,"change"],["정해영","마무리",88,"control"]]},
+"LG":{color:"#c8102e",bat:[["홍창기","좌익수",86,"wait"],["신민재","2루수",83,"speed"],["오스틴","1루수",90,"power"],["문보경","3루수",87,"contact"],["김현수","지명타자",88,"contact"],["박동원","포수",85,"power"],["오지환","유격수",84,"balance"],["박해민","중견수",83,"speed"],["문성주","우익수",82,"contact"]],bench:[["구본혁","내야수",79,"balance"],["김민성","내야수",78,"contact"],["안익훈","외야수",77,"speed"]],pit:[["임찬규","선발",86,"change"],["손주영","중간",84,"fire"],["유영찬","마무리",89,"control"]]},
+"두산":{color:"#131230",bat:[["정수빈","중견수",84,"speed"],["박찬호","유격수",86,"speed"],["케이브","좌익수",88,"power"],["양의지","포수",89,"contact"],["김재환","지명타자",87,"power"],["양석환","1루수",85,"power"],["강승호","3루수",83,"contact"],["김민석","2루수",81,"speed"],["김기연","우익수",79,"balance"]],bench:[["조수행","외야수",78,"speed"],["김대한","외야수",77,"power"],["박준순","내야수",74,"contact"]],pit:[["곽빈","선발",88,"fire"],["이영하","중간",84,"change"],["김택연","마무리",87,"control"]]},
+"SSG":{color:"#ce0e2d",bat:[["최지훈","중견수",84,"speed"],["박성한","유격수",85,"contact"],["최정","3루수",90,"power"],["에레디아","좌익수",88,"power"],["한유섬","우익수",86,"power"],["고명준","1루수",82,"power"],["김성욱","2루수",81,"contact"],["조형우","포수",80,"balance"],["정준재","지명타자",79,"speed"]],bench:[["김민식","포수",77,"contact"],["하재훈","외야수",78,"power"],["이율예","내야수",76,"balance"]],pit:[["김광현","선발",87,"change"],["문승원","중간",84,"fire"],["조병현","마무리",88,"control"]]},
+"KT":{color:"#000000",bat:[["김민혁","좌익수",84,"speed"],["최원준","중견수",83,"speed"],["강백호","1루수",89,"power"],["로하스","우익수",88,"power"],["안현민","지명타자",86,"contact"],["장성우","포수",85,"contact"],["황재균","3루수",84,"balance"],["김상수","유격수",82,"contact"],["배정대","2루수",81,"speed"]],bench:[["문상철","내야수",79,"power"],["김준태","포수",77,"contact"],["오윤석","내야수",76,"balance"]],pit:[["고영표","선발",87,"change"],["소형준","중간",85,"fire"],["박영현","마무리",88,"control"]]},
+"롯데":{color:"#002955",bat:[["황성빈","중견수",84,"speed"],["고승민","2루수",83,"contact"],["레이예스","우익수",89,"power"],["전준우","좌익수",87,"contact"],["손호영","3루수",86,"power"],["나승엽","1루수",84,"power"],["윤동희","지명타자",85,"speed"],["유강남","포수",82,"balance"],["박승욱","유격수",79,"contact"]],bench:[["박찬형","내야수",78,"speed"],["정보근","포수",77,"contact"],["장두성","외야수",74,"speed"]],pit:[["박세웅","선발",87,"fire"],["이민석","중간",83,"change"],["김원중","마무리",88,"control"]]},
+"한화":{color:"#fc4e00",bat:[["문현빈","좌익수",86,"speed"],["심우준","유격수",82,"speed"],["플로리얼","중견수",88,"power"],["노시환","3루수",90,"power"],["채은성","1루수",87,"contact"],["안치홍","2루수",84,"contact"],["최재훈","포수",83,"balance"],["이도윤","지명타자",80,"contact"],["하주석","우익수",81,"speed"]],bench:[["임종찬","외야수",78,"power"],["최인호","내야수",77,"contact"],["황영묵","내야수",79,"speed"]],pit:[["문동주","선발",88,"fire"],["류현진","중간",89,"change"],["김서현","마무리",87,"control"]]},
+"NC":{color:"#315288",bat:[["김주원","유격수",84,"speed"],["박민우","2루수",86,"contact"],["데이비슨","1루수",89,"power"],["박건우","우익수",87,"contact"],["손아섭","지명타자",86,"contact"],["권희동","좌익수",83,"power"],["김형준","포수",82,"balance"],["서호철","3루수",81,"speed"],["이우성","중견수",82,"power"]],bench:[["천재환","외야수",78,"speed"],["김휘집","내야수",77,"contact"],["박한결","외야수",74,"balance"]],pit:[["라일리","선발",87,"fire"],["김시훈","중간",83,"change"],["김영규","마무리",85,"control"]]},
+"키움":{color:"#57000f",bat:[["이주형","중견수",85,"speed"],["송성문","3루수",88,"power"],["카디네스","1루수",87,"power"],["최주환","2루수",84,"contact"],["임지열","좌익수",82,"power"],["김건희","포수",81,"contact"],["전태현","우익수",79,"speed"],["김태진","유격수",80,"balance"],["박주홍","지명타자",78,"speed"]],bench:[["김웅빈","내야수",77,"power"],["변상권","외야수",76,"contact"],["어준서","내야수",74,"speed"]],pit:[["후라도","선발",88,"fire"],["정현우","중간",84,"change"],["주승우","마무리",86,"control"]]}
+};
+const DECK={
+power:["홈런","홈런","3루타","2루타","2루타","2루타","1루타","1루타","실책 출루","삼진","삼진","삼진","삼진","삼진","삼진","삼진","삼진","삼진","삼진","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃"],
+contact:["1루타","1루타","1루타","1루타","1루타","1루타","1루타","2루타","2루타","2루타","2루타","홈런","실책 출루","삼진","삼진","삼진","삼진","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃"],
+wait:["볼넷","볼넷","볼넷","볼넷","볼넷","볼넷","볼넷","볼넷","볼넷","1루타","1루타","1루타","1루타","2루타","실책 출루","삼진","삼진","삼진","삼진","삼진","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","땅볼 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃","뜬공 아웃"]
+};
+function cloneTeam(name){
+  const t=TEAMS[name];
+  const mk=(a,isPit)=>a.map(x=>isPit?{name:x[0],role:x[1],ovr:x[2],ptype:x[3],star:starOf(x[2])}:{name:x[0],pos:x[1],ovr:x[2],type:x[3],star:starOf(x[2]),uses:starOf(x[2])===5?2:1,used:false});
+  return {name,bat:mk(t.bat),bench:mk(t.bench),pit:mk(t.pit),idx:0,pitcher:0,pitcherUsed:new Set(),pitcherInn:{}};
+}
+function effOvr(team,side){
+  const p=team.pit[team.pitcher];
+  const inn=team.pitcherInn[team.pitcher]||0;
+  if(p.star===5) return p.ovr;
+  return inn>=3 ? p.ovr-5 : p.ovr;
+}
+let G=null, picked=null, pending=null;
+const $=id=>document.getElementById(id);
+function initSels(){
+  const names=Object.keys(TEAMS);
+  $("awaySel").innerHTML=names.map(n=>`<option>${n}</option>`).join("");
+  $("homeSel").innerHTML=names.map(n=>`<option>${n}</option>`).join("");
+  $("awaySel").value="KIA"; $("homeSel").value="삼성";
+}
+function log(t){const d=document.createElement("div");d.textContent=t;$("logBox").prepend(d);}
+function isOut(o){return o==="삼진"||o==="땅볼 아웃"||o==="뜬공 아웃";}
+function upDown(o,diff){
+  if(o==="볼넷"||o==="실책 출루") return o;
+  const up=["아웃","1루타","2루타","3루타","홈런"];
+  let cur=isOut(o)?"아웃":o;
+  let i=up.indexOf(cur);
+  if(diff>=10) i=Math.min(4,i+1);
+  else if(diff<=-10) i=Math.max(0,i-1);
+  else return o;
+  return up[i]==="아웃"?"땅볼 아웃":up[i];
+}
+function applyResult(bases,outs,runs,batter,out,opts){
+  // bases: [1B,2B,3B] player or null. returns [bases,outs,runs,scoredNames]
+  let scored=[];
+  const score=(p)=>{if(p) scored.push(p.name); runs++;};
+  if(out==="1루타"){
+    if(bases[2]) score(bases[2]);
+    bases=[batter,bases[0],bases[1]];
+  }else if(out==="2루타"){
+    if(bases[1]) score(bases[1]); if(bases[2]) score(bases[2]);
+    bases=[null,batter,bases[0]];
+  }else if(out==="3루타"){
+    bases.forEach(p=>{if(p) score(p);}); bases=[null,null,batter];
+  }else if(out==="홈런"){
+    bases.forEach(p=>{if(p) score(p);}); score(batter); bases=[null,null,null];
+  }else if(out==="볼넷"){
+    if(bases[0]&&bases[1]&&bases[2]) score(bases[2]);
+    if(bases[0]&&bases[1]) bases[2]=bases[1];
+    if(bases[0]) bases[1]=bases[0];
+    bases[0]=batter;
+  }else if(out==="실책 출루"){
+    if(bases[2]) score(bases[2]);
+    bases=[batter,bases[0],bases[1]];
+  }else if(out==="삼진"){ outs++; }
+  else if(out==="뜬공 아웃"){
+    if(opts&&opts.sf&&bases[2]&&outs<2){ score(bases[2]); bases[2]=null; outs++; }
+    else outs++;
+  }else if(out==="땅볼 아웃"){
+    if(bases[0]&&outs<2){ bases[0]=null; outs+=2; }
+    else outs++;
+  }
+  return [bases,outs,runs,scored];
+}
+function abilityText(p){return {power:"강타 결과가 2루타면 홈런으로",contact:"컨택트 결과가 아웃이면 1루타로",wait:"기다리기 결과가 아웃이면 볼넷으로",speed:"도루 자동 성공 (도루 버튼에서 사용)",balance:"아웃 결과 1회를 다시 뽑기로"}[p.type];}
+function abilityApplies(p,strat,final){
+  if(p.uses<=0) return false;
+  if(p.type==="power") return strat==="power"&&final==="2루타";
+  if(p.type==="contact") return strat==="contact"&&isOut(final);
+  if(p.type==="wait") return strat==="wait"&&isOut(final);
+  if(p.type==="balance") return isOut(final);
+  return false;
+}
+function abilityResult(p,strat,final){
+  if(p.type==="power") return "홈런";
+  if(p.type==="contact") return "1루타";
+  if(p.type==="wait") return "볼넷";
+  return final;
+}
+function startGame(){
+  const away=$("awaySel").value, home=$("homeSel").value;
+  if(away===home){alert("원정과 홈은 다른 팀으로 고르세요.");return;}
+  G={away:cloneTeam(away),home:cloneTeam(home),maxInn:parseInt($("innSel").value),inn:1,top:true,outs:0,
+     bases:[null,null,null],scores:{away:Array(12).fill(0),home:Array(12).fill(0)},over:false,winner:null};
+  picked=null; pending=null; $("logBox").innerHTML="";
+  log(`경기 시작: ${away} (원정) vs ${home} (홈), ${G.maxInn}이닝`);
+  renderAll();
+}
+function curTeam(){return G.top?G.away:G.home;}
+function defTeam(){return G.top?G.home:G.away;}
+function curBatter(){const t=curTeam(); return t.bat[t.idx%t.bat.length];}
+function curPitcher(){const t=defTeam(); return t.pit[t.pitcher];}
+function renderAll(){
+  if(!G){return;}
+  const a=G.away,h=G.home;
+  $("awayTitle").textContent="원정 · "+a.name; $("homeTitle").textContent="홈 · "+h.name;
+  const scoreRow=(team,el)=>{
+    let html=`<td>${team.name}</td>`;
+    for(let i=1;i<=9;i++) html+=`<td class="${G.inn===i?'cur':''}">${team===a&&G.inn===i&&G.top||team===h&&G.inn===i&&!G.top?'':''}${G.scores[team===a?'away':'home'][i]||""}</td>`;
+    const ext=G.scores[team===a?'away':'home'][10]||"";
+    const tot=G.scores[team===a?'away':'home'].reduce((s,v)=>s+v,0);
+    html+=`<td>${ext}</td><td><b>${tot}</b></td>`; $(el).innerHTML=html;
+  };
+  // simpler: rebuild rows directly
+  const mkRow=(team,key)=>{
+    let html=`<td>${team.name}</td>`;
+    for(let i=1;i<=9;i++) html+=`<td>${G.scores[key][i]||""}</td>`;
+    html+=`<td>${G.scores[key][10]||""}</td><td><b>${G.scores[key].reduce((s,v)=>s+v,0)}</b></td>`;
+    return html;
+  };
+  $("awayRow").innerHTML=mkRow(a,"away"); $("homeRow").innerHTML=mkRow(h,"home");
+  const totA=G.scores.away.reduce((s,v)=>s+v,0), totH=G.scores.home.reduce((s,v)=>s+v,0);
+  $("gameInfo").textContent=G.over?`경기 종료: ${G.winner} 승리 (${totA} : ${totH})`:`${G.inn}회${G.top?"초":"말"} · 아웃 ${G.outs}개 · ${a.name} ${totA} : ${totH} ${h.name}`;
+  const bn=["1루","2루","3루"];
+  $("basesBox").innerHTML=G.bases.map((p,i)=>`<span class="${p?'on':''}">${bn[i]}: ${p?p.name:"-"}</span>`).join("")+`<span>현재 수비팀: ${defTeam().name}</span>`;
+  const b=curBatter(), p=curPitcher();
+  $("batterInfo").innerHTML=`${b.name} <span class="stars">${stars(b.star)}</span> ${b.star}성 · ${b.pos} · OVR ${b.ovr} · ${BAT_TYPE[b.type]} · 능력 ${b.uses}회 남음 <span class="tag">${abilityText(b)}</span>`;
+  $("pitcherInfo").innerHTML=`${p.name} <span class="stars">${stars(p.star)}</span> ${p.star}성 · ${p.role} · OVR ${p.ovr} (실효 ${effOvr(defTeam())}) · ${TYPE_KR[p.ptype]} · 피로: ${defTeam().pitcherInn[defTeam().pitcher]||0}이닝`;
+  const showRoster=(team,el)=>{
+    const rows=team.bat.map((x,i)=>`${i+1}. ${x.name} <span class="stars">${stars(x.star)}</span> ${x.pos} OVR ${x.ovr} ${BAT_TYPE[x.type]} (능력 ${x.uses}회)`).join("<br>");
+    const bench=team.bench.map(x=>`${x.name} ${x.pos} OVR ${x.ovr} ${BAT_TYPE[x.type]}`).join(" · ");
+    const pit=team.pit.map(x=>`${x.name} ${x.role} OVR ${x.ovr} ${TYPE_KR[x.ptype]}`).join(" · ");
+    $(el).innerHTML=rows+`<br><span class="tag">벤치: ${bench}</span><br><span class="tag">투수: ${pit}</span>`;
+  };
+  showRoster(a,"awayRoster"); showRoster(h,"homeRoster");
+  // 투수/대타 셀렉트
+  const dt=defTeam();
+  $("pitchSel").innerHTML=dt.pit.map((x,i)=>`<option value="${i}" ${dt.pitcherUsed.has(i)&&i!==dt.pitcher?"disabled":""}>${x.name} (${x.role}, OVR ${x.ovr})${i===dt.pitcher?" - 현재":""}</option>`).join("");
+  $("pitchSel").value=String(dt.pitcher);
+  const ct=curTeam();
+  $("benchSel").innerHTML=ct.bench.map((x,i)=>`<option value="${i}">${x.name} (${x.pos}, OVR ${x.ovr})</option>`).join("");
+  $("drawBtn").disabled=!picked||!!pending||G.over;
+}
+function endInning(){
+  const t=curTeam();
+  // 투수 이닝 카운트: 수비팀 투수
+  const dt=defTeam();
+  dt.pitcherInn[dt.pitcher]=(dt.pitcherInn[dt.pitcher]||0)+1;
+  if(G.top){G.top=false;G.outs=0;G.bases=[null,null,null];}
+  else{
+    G.inn++;G.top=true;G.outs=0;G.bases=[null,null,null];
+    const totA=G.scores.away.reduce((s,v)=>s+v,0), totH=G.scores.home.reduce((s,v)=>s+v,0);
+    if(G.inn>G.maxInn&&totA!==totH){G.over=true;G.winner=totA>totH?G.away.name:G.home.name;log(`경기 종료: ${G.winner} 승리`);}
+  }
+  // 9회말 시작 전 홈 리드 시 종료 (최종 이닝)
+  if(!G.over&&G.inn===G.maxInn&&!G.top){
+    const totA=G.scores.away.reduce((s,v)=>s+v,0), totH=G.scores.home.reduce((s,v)=>s+v,0);
+    if(totH>totA){G.over=true;G.winner=G.home.name;log(`경기 종료: 홈팀 리드로 말 공격 생략, ${G.winner} 승리`);}
+  }
+}
+function doDraw(strat){
+  if(!G||G.over||pending) return;
+  const b=curBatter(), p=curPitcher(), dt=defTeam();
+  let diff=b.ovr-effOvr(dt);
+  if(COUNTER[p.ptype]===strat) diff-=5;
+  const raw=DECK[strat][Math.floor(Math.random()*36)];
+  const fin=upDown(raw,diff);
+  pending={strat,batter:b,pitcher:p,raw,final:fin,diff,abilityUsed:false,sf:false};
+  renderPending();
+  $("drawBtn").disabled=true;
+}
+function renderPending(){
+  if(!pending){$("pendingBox").style.display="none";return;}
+  const p=pending, b=p.batter;
+  let html=`<b>${G.inn}회${G.top?"초":"말"} · ${b.name} (${STRAT_KR[p.strat]})</b><br>뽑은 결과: <b>${p.raw}</b> · OVR 차이 ${p.diff>=0?"+":""}${p.diff} → 최종: <b>${p.final}</b>`;
+  if(p.final==="뜬공 아웃"&&G.bases[2]&&G.outs<2) html+=`<br><label><input type="checkbox" id="sfChk"> 희생플라이로 (3루 주자 득점, 타자 아웃)</label>`;
+  if(abilityApplies(b,p.strat,p.final)&&!p.abilityUsed) html+=`<br><button id="abilBtn">타입 능력 사용 (${abilityText(b)} · ${b.uses}회 남음)</button>`;
+  if(b.type==="balance"&&abilityApplies(b,p.strat,p.final)&&!p.abilityUsed) html+=` <span class="small">밸런스는 다시 뽑기입니다.</span>`;
+  html+=`<br><button class="primary" id="applyBtn">적용하고 다음 타자</button>`;
+  $("pendingBox").innerHTML=html; $("pendingBox").style.display="block";
+  const ab=$("applyBtn"); if(ab) ab.onclick=applyPending;
+  const al=$("abilBtn");
+  if(al) al.onclick=()=>{
+    const b2=pending.batter;
+    if(b2.type==="balance"){
+      const raw2=DECK[pending.strat][Math.floor(Math.random()*36)];
+      const fin2=upDown(raw2,pending.diff);
+      b2.uses--; pending.abilityUsed=true; pending.raw=raw2; pending.final=fin2;
+      log(`밸런스 다시 뽑기: ${b2.name} ${raw2} → ${fin2}`);
+    }else{
+      b2.uses--; pending.abilityUsed=true; pending.final=abilityResult(b2,pending.strat,pending.final);
+    }
+    renderPending();
+  };
+}
+function applyPending(){
+  if(!pending) return;
+  const p=pending, t=curTeam();
+  const sfEl=document.getElementById("sfChk"); const sf=sfEl&&sfEl.checked;
+  const innBefore=G.inn, topBefore=G.top;
+  const beforeScore=G.scores[G.top?"away":"home"].reduce((s,v)=>s+v,0);
+  let [bases,outs,runs,scored]=applyResult(G.bases,G.outs,0,p.batter,p.final,{sf});
+  // runs는 이번 타석 득점 수: applyResult의 runs 인자가 0 시작이라 득점 수 반환
+  G.bases=bases; G.outs=outs;
+  const key=G.top?"away":"home";
+  const idx=G.inn>G.maxInn?10:G.inn;
+  G.scores[key][idx]+=runs;
+  log(`${innBefore}회${topBefore?"초":"말"} ${p.batter.name} (${STRAT_KR[p.strat]}, 차이 ${p.diff}) ${p.raw} → ${p.final}${p.abilityUsed?" [능력 사용]":""}${sf?" [희생플라이]":""}${scored.length?" · 득점: "+scored.join(", "):""}`);
+  // 타순 전진
+  t.idx++;
+  pending=null; $("pendingBox").style.display="none"; picked=null; $("stratPicked").textContent="선택한 전략: (없음)";
+  if(G.outs>=3){ log(`${innBefore}회${topBefore?"초":"말"} 종료`); endInning(); }
+  renderAll();
+}
+function autoAtBat(){
+  if(!G||G.over) return;
+  // 전략 선택
+  let strat;
+  const mode=$("autoSel").value;
+  if(mode==="contact") strat="contact";
+  else if(mode==="power") strat="power";
+  else if(mode==="wait") strat="wait";
+  else if(mode==="random") strat=["power","contact","wait"][Math.floor(Math.random()*3)];
+  else{
+    const totA=G.scores.away.reduce((s,v)=>s+v,0), totH=G.scores.home.reduce((s,v)=>s+v,0);
+    const behind=G.top?totA-totH:totH-totA;
+    if(G.bases[0]&&G.bases[1]&&G.bases[2]) strat="wait";
+    else if(behind<=-2&&G.inn>=G.maxInn-1) strat="power";
+    else if(G.bases[1]||G.bases[2]) strat="contact";
+    else strat=Math.random()<0.6?"contact":(Math.random()<0.5?"power":"wait");
+  }
+  const b=curBatter(), p=curPitcher(), dt=defTeam();
+  let diff=b.ovr-effOvr(dt); if(COUNTER[p.ptype]===strat) diff-=5;
+  const raw=DECK[strat][Math.floor(Math.random()*36)];
+  let fin=upDown(raw,diff);
+  let abil=false;
+  if(abilityApplies(b,strat,fin)){
+    if(b.type==="balance"){ const r2=DECK[strat][Math.floor(Math.random()*36)]; fin=upDown(r2,diff); }
+    else fin=abilityResult(b,strat,fin);
+    b.uses--; abil=true;
+  }
+  const innBefore=G.inn, topBefore=G.top;
+  let sf=false;
+  if(fin==="뜬공 아웃"&&G.bases[2]&&G.outs<2) sf=true;
+  let [bases,outs,runs,scored]=applyResult(G.bases,G.outs,0,b,fin,{sf});
+  G.bases=bases; G.outs=outs;
+  const key=G.top?"away":"home"; const idx=G.inn>G.maxInn?10:G.inn;
+  G.scores[key][idx]+=runs;
+  log(`${innBefore}회${topBefore?"초":"말"} ${b.name} (${STRAT_KR[strat]}, 차이 ${diff}) ${raw} → ${fin}${abil?" [능력]":""}${sf?" [희생플라이]":""}${scored.length?" · 득점: "+scored.join(", "):""}`);
+  curTeam().idx++;
+  if(G.outs>=3){ log(`${innBefore}회${topBefore?"초":"말"} 종료`); endInning(); }
+  renderAll();
+}
+document.querySelectorAll("[data-strat]").forEach(btn=>{
+  btn.onclick=()=>{ if(!G||G.over||pending){alert("경기를 시작하고, 타석 중이 아닐 때 고르세요.");return;} picked=btn.dataset.strat; $("stratPicked").textContent="선택한 전략: "+STRAT_KR[picked]; $("drawBtn").disabled=false; };
+});
+$("drawBtn").onclick=()=>{ if(picked) doDraw(picked); };
+$("buntBtn").onclick=()=>{
+  if(!G||G.over||pending) return;
+  if(G.outs>=2){alert("아웃 2개면 번트 불가");return;}
+  if(!G.bases[0]&&!G.bases[1]&&!G.bases[2]){alert("주자가 없을 때 번트는 의미가 없습니다. 그래도 아웃만 됩니다.");}
+  const b=curBatter();
+  // 주자 1베이스씩
+  let scored=[];
+  if(G.bases[2]) scored.push(G.bases[2].name);
+  G.bases=[null,G.bases[0],G.bases[1]];
+  // 득점 반영: 3루 주자 득점
+  if(scored.length){ const key=G.top?"away":"home"; const idx=G.inn>G.maxInn?10:G.inn; G.scores[key][idx]+=scored.length; }
+  G.outs++; curTeam().idx++;
+  log(`${G.inn}회${G.top?"초":"말"} ${b.name} 희생번트 (주자 진루, 타자 아웃)${scored.length?" · 득점: "+scored.join(", "):""}`);
+  if(G.outs>=3){ const ib=G.inn, tb=G.top; log(`${ib}회${tb?"초":"말"} 종료`); endInning(); }
+  renderAll();
+};
+$("stealBtn").onclick=()=>{
+  if(!G||G.over||pending) return;
+  // 도루는 목표 베이스가 비어 있을 때만 가능: 1루→2루, 2루→3루
+  let baseIdx=-1;
+  if(G.bases[0]&&!G.bases[1]) baseIdx=0;
+  else if(G.bases[1]&&!G.bases[2]) baseIdx=1;
+  if(baseIdx<0){alert("도루할 수 없습니다. (주자가 없거나 목표 베이스에 이미 주자가 있습니다)");return;}
+  const runner=G.bases[baseIdx];
+  let success=false;
+  if(runner.type==="speed"&&runner.uses>0){
+    if(confirm(`${runner.name}의 스피드 능력으로 도루 자동 성공을 쓰겠습니까? (${runner.uses}회 남음)`)){ runner.uses--; success=true; }
+  }
+  if(!success){
+    const card=DECK.contact[Math.floor(Math.random()*36)];
+    success=["1루타","2루타","3루타","홈런"].includes(card);
+    log(`도루 시도: ${runner.name}, 컨택트 행 ${card} → ${success?"성공":"실패"}`);
+  }
+  if(success){
+    if(baseIdx===0){ G.bases[1]=runner; G.bases[0]=null; }
+    else { G.bases[2]=runner; G.bases[1]=null; }
+    renderAll(); return;
+  }else{
+    G.bases[baseIdx]=null; G.outs++;
+    log(`도루 실패: ${runner.name} 아웃`);
+    if(G.outs>=3){ const ib=G.inn, tb=G.top; log(`${ib}회${tb?"초":"말"} 종료`); endInning(); }
+    renderAll();
+  }
+};
+$("startBtn").onclick=startGame;
+$("resetBtn").onclick=()=>{G=null;picked=null;pending=null;$("logBox").innerHTML="";$("gameInfo").textContent="팀을 고르고 경기 시작을 누르세요.";$("batterInfo").textContent="-";$("pitcherInfo").textContent="-";$("basesBox").innerHTML="";};
+$("auto1Btn").onclick=()=>{ if(!G){alert("먼저 경기 시작");return;} if(pending){alert("타석 결과를 먼저 적용하세요.");return;} autoAtBat(); };
+$("autoInnBtn").onclick=()=>{
+  if(!G){alert("먼저 경기 시작");return;}
+  const ib=G.inn, tb=G.top; let guard=0;
+  while(!G.over&&(G.inn===ib&&G.top===tb)&&guard<100){ autoAtBat(); guard++; }
+};
+$("autoGameBtn").onclick=()=>{
+  if(!G){alert("먼저 경기 시작");return;}
+  let guard=0; while(!G.over&&guard<2000){ if(pending){applyPending();} else autoAtBat(); guard++; }
+};
+$("pitchChangeBtn").onclick=()=>{
+  if(!G||G.over||pending){alert("타석 중에는 교체할 수 없습니다.");return;}
+  const dt=defTeam(); const ni=parseInt($("pitchSel").value);
+  if(ni===dt.pitcher) return;
+  dt.pitcherUsed.add(dt.pitcher); dt.pitcher=ni;
+  log(`투수 교체 (${dt.name}): ${dt.pit[ni].name}`);
+  renderAll();
+};
+$("benchChangeBtn").onclick=()=>{
+  if(!G||G.over||pending){alert("타석 중에는 교체할 수 없습니다.");return;}
+  const ct=curTeam(); const bi=parseInt($("benchSel").value);
+  const incoming=ct.bench[bi]; const outgoing=ct.bat[ct.idx%ct.bat.length];
+  ct.bat[ct.idx%ct.bat.length]=incoming; ct.bench.splice(bi,1);
+  log(`대타 교체: ${outgoing.name} → ${incoming.name} (나간 선수는 복귀 불가)`);
+  renderAll();
+};
+$("sim100Btn").onclick=()=>{
+  const away=$("awaySel").value, home=$("homeSel").value, maxInn=parseInt($("innSel").value);
+  let aw=0, hw=0, totA=0, totH=0;
+  for(let g=0;g<100;g++){
+    // 간단 시뮬: 컨택트 고정, 능력 제외, OVR 적용, 선발 투수 고정
+    const A=cloneTeam(away), H=cloneTeam(home);
+    const play=(batTeam,defTeam,inn,top,bases,outs)=>{
+      // 한 이닝 시뮬, returns runs
+      let runs=0, b=bases.slice(), o=outs;
+      while(o<3){
+        const batter=batTeam.bat[batTeam.idx%batTeam.bat.length]; batTeam.idx++;
+        const pitcher=defTeam.pit[defTeam.pitcher];
+        let diff=batter.ovr-pitcher.ovr; // 피로 무시, 상성 무시 (컨택트 고정, 변화구 투수만 -5는 아래에서)
+        if(pitcher.ptype==="change") diff-=5;
+        const raw=DECK.contact[Math.floor(Math.random()*36)];
+        const fin=upDown(raw,diff);
+        let [nb,no,nr,sc]=applyResult(b,o,0,batter,fin,{sf:fin==="뜬공 아웃"&&b[2]&&o<2});
+        b=nb; o=no; runs+=nr;
+      }
+      return runs;
+    };
+    let sA=0,sH=0;
+    for(let inn=1;inn<=maxInn;inn++){
+      sA+=play(A,H,inn,true,[null,null,null],0);
+      if(!(inn===maxInn&&sH>sA)) sH+=play(H,A,inn,false,[null,null,null],0);
+      if(inn===maxInn&&sH>sA) break;
+    }
+    let inn=maxInn+1;
+    while(sA===sH){ sA+=play(A,H,inn,true,[null,null,null],0); sH+=play(H,A,inn,false,[null,null,null],0); inn++; }
+    totA+=sA; totH+=sH; if(sA>sH) aw++; else hw++;
+  }
+  $("simResult").innerHTML=`100경기 시뮬 결과 (${away} 원정 vs ${home} 홈, ${maxInn}이닝, 컨택트 고정): 원정 ${aw}승 · 홈 ${hw}승 · 원정 평균 ${ (totA/100).toFixed(1)}점 · 홈 평균 ${(totH/100).toFixed(1)}점`;
+};
+initSels();
+</script>
+</div></body></html>
